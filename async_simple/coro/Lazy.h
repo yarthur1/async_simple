@@ -46,16 +46,16 @@ class Lazy;
 // ```
 //
 // This would suspend the executing coroutine.
-struct Yield {};
+struct Yield {};    // 依赖 LazyPromiseBase::await_transform转换成awaitable
 
 template <typename T = void>
-struct LazyLocals {};
+struct LazyLocals {};    // 立马返回 _lazy_local
 
 namespace detail {
 template <class, typename OAlloc, bool Para>
 struct CollectAllAwaiter;
 
-template <bool Para, template <typename> typename LazyType, typename... Ts>
+template <bool Para, template <typename> typename LazyType, typename... Ts>   // 参数本身是一个模版
 struct CollectAllVariadicAwaiter;
 
 template <typename LazyType, typename IAlloc>
@@ -74,17 +74,17 @@ public:
     // destroy the frame for the current coroutine explicitly. Since after
     // FinalAwaiter, The current coroutine should be suspended and never to
     // resume. So that we couldn't expect it to release it self any more.
-    struct FinalAwaiter {
+    struct FinalAwaiter {     //  final_suspend 会使用
         bool await_ready() const noexcept { return false; }
         template <typename PromiseType>
-        auto await_suspend(std::coroutine_handle<PromiseType> h) noexcept {
+        auto await_suspend(std::coroutine_handle<PromiseType> h) noexcept {   // h代表当前协程
             static_assert(
                 std::is_base_of<LazyPromiseBase, PromiseType>::value,
                 "the final awaiter is only allowed to be called by Lazy");
 
-            return h.promise()._continuation;
+            return h.promise()._continuation;   // 返回调用者std::coroutine_handle<>并唤醒
         }
-        void await_resume() noexcept {}
+        void await_resume() noexcept {}      // co_await expr 获取的值
     };
 
     struct YieldAwaiter {
@@ -98,7 +98,7 @@ public:
 
             logicAssert(_executor,
                         "Yielding is only meaningful with an executor!");
-            _executor->schedule(std::move(handle));
+            _executor->schedule(std::move(handle));   // handle转换成func?  handle()唤醒协程
         }
         void await_resume() noexcept {}
 
@@ -109,22 +109,22 @@ public:
 public:
     LazyPromiseBase() noexcept : _executor(nullptr), _lazy_local(nullptr) {}
     // Lazily started, coroutine will not execute until first resume() is called
-    std::suspend_always initial_suspend() noexcept { return {}; }
-    FinalAwaiter final_suspend() noexcept { return {}; }
+    std::suspend_always initial_suspend() noexcept { return {}; }    // 协程开始执行时会调用, std::suspend_always需要外部resume才能唤醒
+    FinalAwaiter final_suspend() noexcept { return {}; }   // calls promise.final_suspend() and co_awaits the result
 
     template <typename Awaitable>
     auto await_transform(Awaitable&& awaitable) {
         // See CoAwait.h for details.
-        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));
+        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));   // ??
     }
 
     auto await_transform(CurrentExecutor) {
-        return ReadyAwaiter<Executor*>(_executor);
+        return ReadyAwaiter<Executor*>(_executor);   // co_await返回_executor
     }
 
     template <typename T>
     auto await_transform(LazyLocals<T>) {
-        return ReadyAwaiter<T*>(static_cast<T*>(_lazy_local));
+        return ReadyAwaiter<T*>(static_cast<T*>(_lazy_local));   // 立马返回 _lazy_local
     }
 
     auto await_transform(Yield) { return YieldAwaiter(_executor); }
@@ -150,12 +150,12 @@ public:
     static Lazy<T> get_return_object_on_allocation_failure() noexcept;
 
     template <typename V>
-    void return_value(V&& value) noexcept(
+    void return_value(V&& value) noexcept(    // co_return expr  把表达式的值存入_value  co_return相当于协程执行完毕了，然后调用final_suspend
         std::is_nothrow_constructible_v<
             T, V&&>) requires std::is_convertible_v<V&&, T> {
-        _value.template emplace<T>(std::forward<V>(value));
+        _value.template emplace<T>(std::forward<V>(value));   // 调用模版函数
     }
-    void unhandled_exception() noexcept {
+    void unhandled_exception() noexcept {   // 处理异常，然后调用final_suspend
         _value.template emplace<std::exception_ptr>(std::current_exception());
     }
 
@@ -163,7 +163,7 @@ public:
     T& result() & {
         if (std::holds_alternative<std::exception_ptr>(_value))
             AS_UNLIKELY {
-                std::rethrow_exception(std::get<std::exception_ptr>(_value));
+                std::rethrow_exception(std::get<std::exception_ptr>(_value));  // 会重新抛出异常
             }
         assert(std::holds_alternative<T>(_value));
         return std::get<T>(_value);
@@ -186,7 +186,7 @@ public:
         }
     }
 
-    std::variant<std::monostate, T, std::exception_ptr> _value;
+    std::variant<std::monostate, T, std::exception_ptr> _value;   // union
 };
 
 template <>
@@ -198,7 +198,7 @@ public:
     Lazy<void> get_return_object() noexcept;
     static Lazy<void> get_return_object_on_allocation_failure() noexcept;
 
-    void return_void() noexcept {}
+    void return_void() noexcept {}    // co_return expr; where expr has type void
     void unhandled_exception() noexcept {
         _exception = std::current_exception();
     }
@@ -277,13 +277,13 @@ public:
     using Handle = CoroHandle<promise_type>;
     using ValueType = T;
 
-    struct AwaiterBase : public detail::LazyAwaiterBase<T> {
+    struct AwaiterBase : public detail::LazyAwaiterBase<T> {   // co_await lazy
         using Base = detail::LazyAwaiterBase<T>;
         AwaiterBase(Handle coro) : Base(coro) {}
 
         template <typename PromiseType>
-        AS_INLINE auto await_suspend(std::coroutine_handle<PromiseType>
-                                         continuation) noexcept(!reschedule) {
+        AS_INLINE auto await_suspend(std::coroutine_handle<PromiseType>     // 协程被挂起，然后执行await_suspend函数
+                                         continuation) noexcept(!reschedule) {   // noexcept关键字后面的表达式用于指示函数是否可能抛出异常
             static_assert(
                 std::is_base_of<LazyPromiseBase, PromiseType>::value ||
                     std::is_same_v<detail::DetachedCoroutine::promise_type,
@@ -292,7 +292,7 @@ public:
                 "DetachedCoroutine");
 
             // current coro started, caller becomes my continuation
-            this->_handle.promise()._continuation = continuation;
+            this->_handle.promise()._continuation = continuation;   // continuation代表调用者协程，被挂起后，保存在新的lazy代表的协程中
             if constexpr (std::is_base_of<LazyPromiseBase,
                                           PromiseType>::value) {
                 this->_handle.promise()._lazy_local =
@@ -307,20 +307,20 @@ public:
                 // executor schedule performed
                 auto& pr = this->_handle.promise();
                 logicAssert(pr._executor, "RescheduleLazy need executor");
-                pr._executor->schedule(this->_handle);
+                pr._executor->schedule(this->_handle);    // 返回void,当前被挂起，新的handle调度到excutor被resume
             } else {
-                return this->_handle;
+                return this->_handle;   // 执行返回的handle,lazy对象代表的新的协程
             }
         }
     };
 
     struct TryAwaiter : public AwaiterBase {
         TryAwaiter(Handle coro) : AwaiterBase(coro) {}
-        AS_INLINE Try<T> await_resume() noexcept {
+        AS_INLINE Try<T> await_resume() noexcept {   // 结果从哪来? 从传进来的handle中取
             return AwaiterBase::awaitResumeTry();
         };
 
-        auto coAwait(Executor* ex) {
+        auto coAwait(Executor* ex) {    // 替换excutor
             if constexpr (reschedule) {
                 logicAssert(false,
                             "RescheduleLazy should be only allowed in "
@@ -354,7 +354,7 @@ public:
     Executor* getExecutor() { return _coro.promise()._executor; }
 
     template <typename F>
-    void start(F&& callback) requires(std::is_invocable_v<F&&, Try<T>>) {
+    void start(F&& callback) requires(std::is_invocable_v<F&&, Try<T>>) {  // start并设置和执行回调
         logicAssert(this->_coro.operator bool(),
                     "Lazy do not have a coroutine_handle "
                     "Maybe the allocation failed or you're using a used Lazy");
@@ -363,8 +363,8 @@ public:
         // be ignored. a detached coroutine will not suspend at initial/final
         // suspend point.
         auto launchCoro = [](LazyBase lazy,
-                             std::decay_t<F> cb) -> detail::DetachedCoroutine {
-            cb(co_await lazy.coAwaitTry());
+                             std::decay_t<F> cb) -> detail::DetachedCoroutine {   // lambda代表一个协程
+            cb(co_await lazy.coAwaitTry());        // co_await后面只需要一个awaitable对象即可
         };
         [[maybe_unused]] auto detached =
             launchCoro(std::move(*this), std::forward<F>(callback));
@@ -563,8 +563,8 @@ private:
 };
 
 template <typename T>
-inline Lazy<T> detail::LazyPromise<T>::get_return_object() noexcept {
-    return Lazy<T>(Lazy<T>::Handle::from_promise(*this));
+inline Lazy<T> detail::LazyPromise<T>::get_return_object() noexcept {    // 返回Lazy<T>对象
+    return Lazy<T>(Lazy<T>::Handle::from_promise(*this));    // from_promise返回给定协程的 coroutine_handle 
 }
 
 inline Lazy<void> detail::LazyPromise<void>::get_return_object() noexcept {

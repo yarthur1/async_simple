@@ -93,8 +93,8 @@ inline ThreadPool::ThreadPool(size_t threadNum, bool enableWorkSteal,
       _stop(false),
       _enableWorkSteal(enableWorkSteal),
       _enableCoreBindings(enableCoreBindings) {
-    auto worker = [this](size_t id) {
-        auto current = getCurrent();
+    auto worker = [this](size_t id) {    // 线程跑的loop函数
+        auto current = getCurrent();   // 每个线程一个thread local
         current->first = id;
         current->second = this;
         while (true) {
@@ -197,7 +197,7 @@ inline ThreadPool::ERROR_TYPE ThreadPool::scheduleById(std::function<void()> fn,
     return ERROR_NONE;
 }
 
-inline std::pair<size_t, ThreadPool *> *ThreadPool::getCurrent() const {
+inline std::pair<size_t, ThreadPool *> *ThreadPool::getCurrent() const {    // 返回thread local变量
     static thread_local std::pair<size_t, ThreadPool *> current(-1, nullptr);
     return &current;
 }

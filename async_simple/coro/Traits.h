@@ -27,7 +27,7 @@ namespace coro {
 namespace detail {
 
 template <class T>
-concept HasCoAwaitMethod = requires(T&& awaitable) {
+concept HasCoAwaitMethod = requires(T&& awaitable) {   // concept用法
     std::forward<T>(awaitable).coAwait(nullptr);
 };
 

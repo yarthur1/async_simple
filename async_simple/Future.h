@@ -90,7 +90,7 @@ public:
         return *this;
     }
 
-    auto coAwait(Executor*) && noexcept { return std::move(*this); }
+    auto coAwait(Executor*) && noexcept { return std::move(*this); }  // && 限制调用者的类型
 
 public:
     bool valid() const {
@@ -134,11 +134,11 @@ public:
     // If future in uthread context, use await(future) to get value without
     // thread blocked.
     T get() && {
-        wait();
+        wait();  // 等待结果，future的成员变量已经改变
         return (std::move(*this)).value();
     }
     // Implementation for get() to wait synchronously.
-    void wait() {
+    void wait() {    // 会调用 operator= 替换future自身
         logicAssert(valid(), "Future is broken");
 
         if (hasResult()) {
@@ -150,7 +150,7 @@ public:
 
         // The state is a shared state
         Promise<T> promise;
-        auto future = promise.getFuture();
+        auto future = promise.getFuture();  // promise和future共享 state
 
         _sharedState->setExecutor(
             nullptr);  // following continuation is simple, execute inplace
@@ -160,14 +160,14 @@ public:
         _sharedState->setContinuation(
             [&mtx, &cv, &done, p = std::move(promise)](Try<T>&& t) mutable {
                 std::unique_lock<std::mutex> lock(mtx);
-                p.setValue(std::move(t));
+                p.setValue(std::move(t));    // t=_try_value  setContinuation之前已经设置?
                 done.store(true, std::memory_order_relaxed);
                 cv.notify_one();
             });
         std::unique_lock<std::mutex> lock(mtx);
         cv.wait(lock,
                 [&done]() { return done.load(std::memory_order_relaxed); });
-        *this = std::move(future);
+        *this = std::move(future);   // 调用 operator= 函数,将future对象的成员移动到this对象
         assert(_sharedState->hasResult());
     }
 
@@ -309,7 +309,7 @@ private:
                 } else {
                     if constexpr (R::ReturnsFuture::value) {
                         try {
-                            auto f2 = f(std::move(t));
+                            auto f2 = f(std::move(t));   // f2为future
                             f2.setContinuation(
                                 [pm = std::move(p)](Try<T2>&& t2) mutable {
                                     pm.setValue(std::move(t2));

@@ -56,7 +56,7 @@ public:
         return _pool.scheduleById(std::move(func)) ==
                util::ThreadPool::ERROR_NONE;
     }
-    bool currentThreadInExecutor() const override {
+    bool currentThreadInExecutor() const override {  // 根据thread local变量判断
         return _pool.getCurrentId() != -1;
     }
     ExecutorStat stat() const override { return ExecutorStat(); }
@@ -68,7 +68,7 @@ public:
         return reinterpret_cast<Context>(_pool.getCurrentId() | kContextMask);
     }
 
-    bool checkin(Func func, Context ctx, ScheduleOptions opts) override {
+    bool checkin(Func func, Context ctx, ScheduleOptions opts) override {  // context指定线程
         int64_t id = reinterpret_cast<int64_t>(ctx);
         auto prompt =
             _pool.getCurrentId() == (id & (~kContextMask)) && opts.prompt;

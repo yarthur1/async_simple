@@ -53,7 +53,7 @@ requires(policy == Launch::Prompt) inline Uthread async(F&& f, Executor* ex) {
 }
 
 template <Launch policy, class F>
-requires(policy == Launch::Schedule) inline void async(F&& f, Executor* ex) {
+requires(policy == Launch::Schedule) inline void async(F&& f, Executor* ex) {   // 没有回调
     if (!ex)
         AS_UNLIKELY { return; }
     ex->schedule([f = std::move(f), ex]() {
@@ -81,7 +81,7 @@ requires(policy == Launch::Current) inline void async(F&& f, Executor* ex) {
 }
 
 template <class F, class... Args,
-          typename R = std::invoke_result_t<F&&, Args&&...>>
+          typename R = std::invoke_result_t<F&&, Args&&...>>        // 推断的返回值类型
 inline Future<R> async(Launch policy, Attribute attr, F&& f, Args&&... args) {
     if (policy == Launch::Schedule) {
         if (!attr.ex)
@@ -91,15 +91,15 @@ inline Future<R> async(Launch policy, Attribute attr, F&& f, Args&&... args) {
             }
     }
     Promise<R> p;
-    auto rc = p.getFuture().via(attr.ex);
+    auto rc = p.getFuture().via(attr.ex);  // via设置excutor，返回新的future
     auto proc = [p = std::move(p), ex = attr.ex, f = std::forward<F>(f),
                  args =
                      std::make_tuple(std::forward<Args>(args)...)]() mutable {
         if (ex) {
-            p.forceSched().checkout();
+            p.forceSched().checkout();   // checkout保存当前线程id
         }
         if constexpr (std::is_void_v<R>) {
-            std::apply(f, std::move(args));
+            std::apply(f, std::move(args));   // 执行函数
             p.setValue();
         } else {
             p.setValue(std::apply(f, std::move(args)));

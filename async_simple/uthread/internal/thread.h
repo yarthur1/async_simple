@@ -43,7 +43,7 @@ class thread_context {
     using stack_holder = std::unique_ptr<char[], stack_deleter>;
 
     const size_t stack_size_;
-    stack_holder stack_{make_stack()};
+    stack_holder stack_{make_stack()}; // 栈空间
     std::function<void()> func_;
     jmp_buf_link context_;
 

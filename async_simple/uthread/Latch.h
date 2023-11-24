@@ -53,7 +53,7 @@ public:
         }
         auto lastCount = _count.fetch_sub(n, std::memory_order_acq_rel);
         if (lastCount == 1u) {
-            _promise.setValue(true);
+            _promise.setValue(true);   // notice
         }
     }
     void await(Executor* ex) {

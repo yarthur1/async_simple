@@ -65,8 +65,8 @@ namespace thread_impl {
 
 inline thread_context* get() { return g_current_context->thread; }
 
-void switch_in(thread_context* to);
-void switch_out(thread_context* from);
+void switch_in(thread_context* to);   // 切换到to
+void switch_out(thread_context* from);  // 从from切换到from.link
 bool can_switch_out();
 
 }  // namespace thread_impl

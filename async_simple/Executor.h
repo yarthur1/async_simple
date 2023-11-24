@@ -99,7 +99,7 @@ public:
     // same "Context" as before.
     virtual size_t currentContextId() const { return 0; };
     virtual Context checkout() { return NULLCTX; }
-    virtual bool checkin(Func func, [[maybe_unused]] Context ctx,
+    virtual bool checkin(Func func, [[maybe_unused]] Context ctx,    // 使用 [[maybe_unused]] 属性可以帮助我们避免编译器产生未使用警告
                          [[maybe_unused]] ScheduleOptions opts) {
         return schedule(std::move(func));
     }
@@ -143,7 +143,7 @@ public:
 
     template <typename PromiseType>
     void await_suspend(std::coroutine_handle<PromiseType> continuation) {
-        _ex->schedule(std::move(continuation), _dur);
+        _ex->schedule(std::move(continuation), _dur);    // 调度执行
     }
     void await_resume() const noexcept {}
 
@@ -157,7 +157,7 @@ class Executor::TimeAwaitable {
 public:
     TimeAwaitable(Executor *ex, Executor::Duration dur) : _ex(ex), _dur(dur) {}
 
-    auto coAwait(Executor *) { return Executor::TimeAwaiter(_ex, _dur); }
+    auto coAwait(Executor *) { return Executor::TimeAwaiter(_ex, _dur); }   // 返回TimeAwaiter  不是TimeAwaitable
 
 private:
     Executor *_ex;

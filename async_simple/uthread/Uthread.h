@@ -56,7 +56,7 @@ public:
             return false;
         }
         _ctx->joined_ = true;
-        auto f = _ctx->done_.getFuture().via(_attr.ex);
+        auto f = _ctx->done_.getFuture().via(_attr.ex);   // via 设置excutor,返回future
         if (f.hasResult()) {
             callback();
             return true;

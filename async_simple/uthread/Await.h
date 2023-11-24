@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* This file implements await interface. This should be used in
+/* This file implements await interface. This should be used in     // co_await对应无栈，await有栈调用无栈
  * a uthread stackful coroutine to await a stackless coroutine.
  * The key point here is that the function to call await doesn't
  * want to be a stackful coroutine since if a function wants to await
@@ -36,27 +36,27 @@ namespace uthread {
 // Invoke await will not block current thread.
 // The current uthread will be suspend until promise.setValue() be called.
 template <class T>
-T await(Future<T>&& fut) {
+T await(Future<T>&& fut) {    // 有栈协程之间切换
     logicAssert(fut.valid(), "Future is broken");
     if (fut.hasResult()) {
         return fut.value();
     }
     auto executor = fut.getExecutor();
     logicAssert(executor, "Future not has Executor");
-    logicAssert(executor->currentThreadInExecutor(),
+    logicAssert(executor->currentThreadInExecutor(),    // await调用一定要在执行器中
                 "await invoked not in Executor");
     Promise<T> p;
     auto f = p.getFuture().via(executor);
-    p.forceSched().checkout();
+    p.forceSched().checkout();   // 强制调度并保存context
 
     auto ctx = uthread::internal::thread_impl::get();
     f.setContinuation(
-        [ctx](auto&&) { uthread::internal::thread_impl::switch_in(ctx); });
+        [ctx](auto&&) { uthread::internal::thread_impl::switch_in(ctx); });  // setContinuation由setValue触发， 切换回来
 
-    std::move(fut).thenTry(
-        [p = std::move(p)](Try<T>&& t) mutable { p.setValue(std::move(t)); });
+    std::move(fut).thenTry(      // thenTry相当于setContinuation，需要fut  setvalue才会触发
+        [p = std::move(p)](Try<T>&& t) mutable { p.setValue(std::move(t)); });   // 将原来fut的值设置到新的promise对象中
     do {
-        uthread::internal::thread_impl::switch_out(ctx);
+        uthread::internal::thread_impl::switch_out(ctx);   // 切换到其他协程
         assert(f.hasResult());
     } while (!f.hasResult());
     return f.value();
@@ -81,11 +81,11 @@ T await(Future<T>&& fut) {
 template <class Fn, class... Args>
 decltype(auto) await(Executor* ex, Fn&& fn, Args&&... args) requires
     std::is_invocable_v<Fn&&, Args&&...> {
-    using ValueType = typename std::invoke_result_t<Fn&&, Args&&...>::ValueType;
+    using ValueType = typename std::invoke_result_t<Fn&&, Args&&...>::ValueType;   // 需要返回值定义了ValueType，async_simple::Future没有
     Promise<ValueType> p;
     auto f = p.getFuture().via(ex);
     auto lazy =
-        [p = std::move(p)]<typename... Ts>(Ts&&... ts) mutable -> coro::Lazy<> {
+        [p = std::move(p)]<typename... Ts>(Ts&&... ts) mutable -> coro::Lazy<> {   // lambda模版
         if constexpr (std::is_void_v<ValueType>) {
             co_await std::invoke(std::forward<Ts>(ts)...);
             p.setValue();
@@ -94,10 +94,10 @@ decltype(auto) await(Executor* ex, Fn&& fn, Args&&... args) requires
         }
         co_return;
     };
-    lazy(std::forward<Fn>(fn), std::forward<Args>(args)...)
+    lazy(std::forward<Fn>(fn), std::forward<Args>(args)...)    // 无栈协程
         .setEx(ex)
         .start([](auto&&) {});
-    return await(std::move(f));
+    return await(std::move(f));   // future需要setvalue
 }
 
 // This await interface is special. It would accept the function who receive an

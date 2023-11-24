@@ -32,7 +32,7 @@ struct IsFuture : std::false_type {
 };
 
 template <typename T>
-struct IsFuture<Future<T>> : std::true_type {
+struct IsFuture<Future<T>> : std::true_type {   // 模版特化
     using Inner = T;
 };
 

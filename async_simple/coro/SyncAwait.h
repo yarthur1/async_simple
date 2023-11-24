@@ -45,7 +45,7 @@ inline auto syncAwait(LazyType &&lazy) {
             value = std::move(result);
             cond.release();
         });
-    cond.acquire();
+    cond.acquire();  // 等待
     return std::move(value).value();
 }
 

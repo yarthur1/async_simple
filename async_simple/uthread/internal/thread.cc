@@ -82,10 +82,10 @@ size_t get_base_stack_size() {
 }
 
 inline void jmp_buf_link::switch_in() {
-    link = std::exchange(g_current_context, this);
+    link = std::exchange(g_current_context, this);   // 用新的值替换老的值，不是swap
     if (!link)
         AS_UNLIKELY { link = &g_unthreaded_context; }
-    start_switch_fiber(this);
+    start_switch_fiber(this);     // 切换到当前对象
     // `thread` is currently only used in `s_main`
     fcontext = _fl_jump_fcontext(fcontext, thread).fctx;
     finish_switch_fiber(this);
@@ -93,7 +93,7 @@ inline void jmp_buf_link::switch_in() {
 
 inline void jmp_buf_link::switch_out() {
     g_current_context = link;
-    start_switch_fiber(link);
+    start_switch_fiber(link);    // 切换到当前对象的link
     link->fcontext = _fl_jump_fcontext(link->fcontext, thread).fctx;
     finish_switch_fiber(link);
 }

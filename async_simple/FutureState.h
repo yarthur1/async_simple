@@ -43,7 +43,7 @@ enum class State : uint8_t {
     DONE = 1 << 5,
 };
 
-constexpr State operator|(State lhs, State rhs) {
+constexpr State operator|(State lhs, State rhs) {   // constexpr 指示编译期计算
     return State((uint8_t)lhs | (uint8_t)rhs);
 }
 
@@ -177,7 +177,7 @@ public:
 
     void checkout() {
         if (_executor) {
-            _context = _executor->checkout();
+            _context = _executor->checkout();   // 保存当前调用者线程id context
         }
     }
     void setForceSched(bool force = true) {
@@ -216,7 +216,7 @@ public:
             case detail::State::ONLY_CONTINUATION:
                 if (_state.compare_exchange_strong(state, detail::State::DONE,
                                                    std::memory_order_release)) {
-                    scheduleContinuation(false);
+                    scheduleContinuation(false);    // 已经设置了continue,设置值就可以直接执行
                     return;
                 }
             default:
@@ -225,11 +225,11 @@ public:
     }
 
     template <typename F>
-    void setContinuation(F&& func) {
+    void setContinuation(F&& func) {  // 设置要运行的函数以及修改状态便于后续调度运行
         logicAssert(!hasContinuation(),
                     "FutureState already has a continuation");
         MoveWrapper<F> lambdaFunc(std::move(func));
-        new (&_continuation) Continuation([lambdaFunc](Try<T>&& v) mutable {
+        new (&_continuation) Continuation([lambdaFunc](Try<T>&& v) mutable {  // 表明捕获参数可变
             auto& lambda = lambdaFunc.get();
             lambda(std::forward<Try<T>>(v));
         });
@@ -248,7 +248,7 @@ public:
             case detail::State::ONLY_RESULT:
                 if (_state.compare_exchange_strong(state, detail::State::DONE,
                                                    std::memory_order_release)) {
-                    scheduleContinuation(true);
+                    scheduleContinuation(true);   // 已经设置了值，直接执行continue
                     return;
                 }
             default:
@@ -256,7 +256,7 @@ public:
         }
     }
 
-    bool currentThreadInExecutor() const {
+    bool currentThreadInExecutor() const {   // 是否在执行器中
         if (!_executor) {
             return false;
         }
@@ -264,7 +264,7 @@ public:
     }
 
 private:
-    void scheduleContinuation(bool triggerByContinuation) {
+    void scheduleContinuation(bool triggerByContinuation) {   // 调度执行
         logicAssert(
             _state.load(std::memory_order_relaxed) == detail::State::DONE,
             "FutureState is not DONE");
@@ -326,7 +326,7 @@ private:
     std::atomic<uint8_t> _continuationRef;
     Try<T> _try_value;
     union {
-        Continuation _continuation;
+        Continuation _continuation;   // 函数类型
     };
     Executor* _executor;
     Executor::Context _context;
