@@ -57,7 +57,7 @@ concept HasGlobalCoAwaitOperator = requires(T&& awaitable) {
 #endif
 
 template <typename Awaitable>
-auto getAwaiter(Awaitable&& awaitable) {
+auto getAwaiter(Awaitable&& awaitable) {    // 如果有co_await重载就执行，没有就直接返回源对象
     if constexpr (HasMemberCoAwaitOperator<Awaitable>)
         return std::forward<Awaitable>(awaitable).operator co_await();
     else if constexpr (HasGlobalCoAwaitOperator<Awaitable>)

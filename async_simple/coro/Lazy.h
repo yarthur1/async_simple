@@ -91,14 +91,14 @@ public:
         YieldAwaiter(Executor* executor) : _executor(executor) {}
         bool await_ready() const noexcept { return false; }
         template <typename PromiseType>
-        void await_suspend(std::coroutine_handle<PromiseType> handle) {
+        void await_suspend(std::coroutine_handle<PromiseType> handle) {   // handle代表调用者协程
             static_assert(
                 std::is_base_of<LazyPromiseBase, PromiseType>::value,
                 "'co_await Yield' is only allowed to be called by Lazy");
 
             logicAssert(_executor,
                         "Yielding is only meaningful with an executor!");
-            _executor->schedule(std::move(handle));   // handle转换成func?  handle()唤醒协程
+            _executor->schedule(std::move(handle));   // handle转换成func?  handle()唤醒协程，调用者协程被挂起，然后放到执行器去执行
         }
         void await_resume() noexcept {}
 
@@ -107,15 +107,15 @@ public:
     };
 
 public:
-    LazyPromiseBase() noexcept : _executor(nullptr), _lazy_local(nullptr) {}
+    LazyPromiseBase() noexcept : _executor(nullptr), _lazy_local(nullptr) {}   // 默认没有执行器
     // Lazily started, coroutine will not execute until first resume() is called
     std::suspend_always initial_suspend() noexcept { return {}; }    // 协程开始执行时会调用, std::suspend_always需要外部resume才能唤醒
     FinalAwaiter final_suspend() noexcept { return {}; }   // calls promise.final_suspend() and co_awaits the result
 
     template <typename Awaitable>
-    auto await_transform(Awaitable&& awaitable) {
+    auto await_transform(Awaitable&& awaitable) {   // lazy协程里面调用了  co_await expr 都会先调用这个
         // See CoAwait.h for details.
-        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));   // ??
+        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));   // 将当前协程的执行器传递过去
     }
 
     auto await_transform(CurrentExecutor) {
@@ -281,7 +281,7 @@ public:
         using Base = detail::LazyAwaiterBase<T>;
         AwaiterBase(Handle coro) : Base(coro) {}
 
-        template <typename PromiseType>
+        template <typename PromiseType>   // PromiseType这个类型应该是co_await lazy的调用者决定的
         AS_INLINE auto await_suspend(std::coroutine_handle<PromiseType>     // 协程被挂起，然后执行await_suspend函数
                                          continuation) noexcept(!reschedule) {   // noexcept关键字后面的表达式用于指示函数是否可能抛出异常
             static_assert(
@@ -289,26 +289,26 @@ public:
                     std::is_same_v<detail::DetachedCoroutine::promise_type,
                                    PromiseType>,
                 "'co_await Lazy' is only allowed to be called by Lazy or "
-                "DetachedCoroutine");
+                "DetachedCoroutine");      // ****  reschedule lazy不能被直接co_await
 
             // current coro started, caller becomes my continuation
             this->_handle.promise()._continuation = continuation;   // continuation代表调用者协程，被挂起后，保存在新的lazy代表的协程中
             if constexpr (std::is_base_of<LazyPromiseBase,
                                           PromiseType>::value) {
                 this->_handle.promise()._lazy_local =
-                    continuation.promise()._lazy_local;
+                    continuation.promise()._lazy_local;   // 调用者的local数据放到新的协程中
             }
             return awaitSuspendImpl();
         }
 
     private:
         auto awaitSuspendImpl() noexcept(!reschedule) {
-            if constexpr (reschedule) {
+            if constexpr (reschedule) {     // DetachedCoroutine 中co_await reschedulelazy
                 // executor schedule performed
                 auto& pr = this->_handle.promise();
                 logicAssert(pr._executor, "RescheduleLazy need executor");
                 pr._executor->schedule(this->_handle);    // 返回void,当前被挂起，新的handle调度到excutor被resume
-            } else {
+            } else {       // lazy 中co_await lazy
                 return this->_handle;   // 执行返回的handle,lazy对象代表的新的协程
             }
         }
@@ -320,7 +320,7 @@ public:
             return AwaiterBase::awaitResumeTry();
         };
 
-        auto coAwait(Executor* ex) {    // 替换excutor
+        auto coAwait(Executor* ex) {    // 继承excutor
             if constexpr (reschedule) {
                 logicAssert(false,
                             "RescheduleLazy should be only allowed in "
@@ -354,7 +354,7 @@ public:
     Executor* getExecutor() { return _coro.promise()._executor; }
 
     template <typename F>
-    void start(F&& callback) requires(std::is_invocable_v<F&&, Try<T>>) {  // start并设置和执行回调
+    void start(F&& callback) requires(std::is_invocable_v<F&&, Try<T>>) {  // start并设置回调
         logicAssert(this->_coro.operator bool(),
                     "Lazy do not have a coroutine_handle "
                     "Maybe the allocation failed or you're using a used Lazy");
@@ -472,10 +472,10 @@ protected:
 //
 // If any awaitable wants to derive the executor instance from its caller, it
 // should implement `coAwait(Executor*)` member method. Then the caller would
-// pass its executor instance to the awaitable.
+// pass its executor instance to the awaitable.       coAwait将调用者执行器传递给新的协程
 template <typename T = void>
 class [[nodiscard]] CORO_ONLY_DESTROY_WHEN_DONE ELIDEABLE_AFTER_AWAIT Lazy
-    : public detail::LazyBase<T, /*reschedule=*/false> {
+    : public detail::LazyBase<T, /*reschedule=*/false> {   // lazy对象不允许被调度
     using Base = detail::LazyBase<T, false>;
 
 public:
@@ -532,7 +532,7 @@ private:
 // executor would execute the Lazy task later.
 template <typename T = void>
 class [[nodiscard]] RescheduleLazy
-    : public detail::LazyBase<T, /*reschedule=*/true> {
+    : public detail::LazyBase<T, /*reschedule=*/true> {   // 没有 coAwait函数
     using Base = detail::LazyBase<T, true>;
 
 public:

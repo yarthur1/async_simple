@@ -167,7 +167,7 @@ inline ThreadPool::~ThreadPool() {
 }
 
 inline ThreadPool::ERROR_TYPE ThreadPool::scheduleById(std::function<void()> fn,
-                                                       int32_t id) {
+                                                       int32_t id) {   // 默认 -1
     if (nullptr == fn) {
         return ERROR_POOL_ITEM_IS_NULL;
     }

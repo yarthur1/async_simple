@@ -144,6 +144,13 @@ Lazy<uint64_t> CountCharInFilesCoro(const std::vector<FileName> &Files,
     co_return ReadSize;
 }
 
+// Lazy<uint64_t> CountCharInFilesCoro1(const std::vector<FileName> &Files,
+//                                     char c, Executor* ex) {
+//     uint64_t ReadSize = 0;
+//     ReadSize = co_await CountCharInFilesCoro(Files, c).via(ex);
+//     co_return ReadSize;
+// }
+
 int main() {
     std::vector<FileName> Files = {
         "Input/1.txt", "Input/2.txt",
@@ -175,6 +182,10 @@ int main() {
     auto ResCoro = syncAwait(CountCharInFilesCoro(Files, 'x'), &executor);
     std::cout << "Files contain " << ResCoro << " 'x' chars.\n";
 
+    // std::cout << "Calculating char counts asynchronously by coroutine.\n";
+    // ResCoro = syncAwait(CountCharInFilesCoro1(Files, 'x', &executor));
+    // std::cout << "Files contain " << ResCoro << " 'x' chars.\n";
+
     using namespace async_simple::uthread;
     std::cout << "Calculating char counts asynchronously by ucoroutine.\n";
     // await调用一定要在执行器中
@@ -182,6 +193,13 @@ int main() {
                   Launch::Current, Attribute{&executor},
                   &CountCharInFiles, Files, 'x'));
     std::cout << "Files contain " << ResCoro << " 'x' chars.\n";
+
+
+    CountCharInFilesCoro(Files, 'x').start([](Try<uint64_t> result) {
+            std::this_thread::sleep_for(std::chrono::seconds(5)); // 线程睡眠5秒钟
+            std::cout << std::move(result).value()<<std::endl;
+        });
+    std::cout << "yxj\n";
 
     return 0;
 }

@@ -168,7 +168,7 @@ struct [[nodiscard]] ViaAsyncAwaiter {
 // between Lazy system and other hand-crafted Awaitables.
 //  2. Awaitable has a "coAwait" method: coAwait will be called and an Awaiter
 // should returned, then co_await Awaiter will performed. Lazy<T> has coAwait
-// method, so co_await Lazy<T> will not lead to a reschedule.
+// method, so co_await Lazy<T> will not lead to a reschedule.     IM
 //
 // FIXME: In case awaitable is not a real awaitable, consider return
 // ReadyAwaiter instead. It would be much cheaper in case we `co_await
@@ -179,8 +179,8 @@ inline auto coAwait(Executor* ex, Awaitable&& awaitable) {
         return detail::getAwaiter(
             std::forward<Awaitable>(awaitable).coAwait(ex));
     } else {
-        using AwaiterType =
-            decltype(detail::getAwaiter(std::forward<Awaitable>(awaitable)));
+        using AwaiterType =   // ValueAwaiter
+            decltype(detail::getAwaiter(std::forward<Awaitable>(awaitable)));   // RescheduleLazy没有coAwait函数
         return ViaAsyncAwaiter<std::decay_t<AwaiterType>>(
             ex, std::forward<Awaitable>(awaitable));
     }
