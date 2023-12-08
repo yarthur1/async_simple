@@ -200,6 +200,9 @@ int main() {
             std::cout << std::move(result).value()<<std::endl;
         });
     std::cout << "yxj\n";
+    int64_t usec=-1;
+    int64_t usec_rounded_to_sec = usec / 1000000L * 1000000L;
+    std::cout << usec_rounded_to_sec<<std::endl;
 
     return 0;
 }

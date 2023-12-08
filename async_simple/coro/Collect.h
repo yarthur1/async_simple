@@ -256,7 +256,7 @@ struct SimpleCollectAnyVariadicAwaiter {
     }
 };
 
-template <class Container, typename OAlloc, bool Para = false>
+template <class Container, typename OAlloc, bool Para = false>   // 并行collect
 struct CollectAllAwaiter {
     using ValueType = typename Container::value_type::ValueType;
 
@@ -275,7 +275,7 @@ struct CollectAllAwaiter {
             std::coroutine_handle<LazyPromiseBase>::from_address(
                 continuation.address())
                 .promise();
-        auto executor = promise_type._executor;
+        auto executor = promise_type._executor;   // 获取当前调用者的promise
         for (size_t i = 0; i < _input.size(); ++i) {
             auto& exec = _input[i]._coro.promise()._executor;
             if (exec == nullptr) {
@@ -299,7 +299,7 @@ struct CollectAllAwaiter {
             }
             func();
         }
-        _event.setAwaitingCoro(continuation);
+        _event.setAwaitingCoro(continuation);  // 如果任务很快执行完，后面就直接唤醒了获取结果
         auto awaitingCoro = _event.down();
         if (awaitingCoro) {
             awaitingCoro.resume();
@@ -343,8 +343,8 @@ inline auto collectAllImpl(Container input, OAlloc out_alloc = OAlloc()) {
     using LazyType = typename Container::value_type;
     using AT = std::conditional_t<
         is_lazy<LazyType>::value,
-        detail::SimpleCollectAllAwaitable<Container, OAlloc, Para>,
-        detail::CollectAllAwaiter<Container, OAlloc, Para>>;
+        detail::SimpleCollectAllAwaitable<Container, OAlloc, Para>,   // lazy?
+        detail::CollectAllAwaiter<Container, OAlloc, Para>>;     // reschedule lazy?
     return AT(std::move(input), out_alloc);
 }
 

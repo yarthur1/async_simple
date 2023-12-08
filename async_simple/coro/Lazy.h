@@ -115,7 +115,7 @@ public:
     template <typename Awaitable>
     auto await_transform(Awaitable&& awaitable) {   // lazy协程里面调用了  co_await expr 都会先调用这个
         // See CoAwait.h for details.
-        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));   // 将当前协程的执行器传递过去
+        return detail::coAwait(_executor, std::forward<Awaitable>(awaitable));   // 将当前协程的执行器传递过去，调用了ViaCoroutine.h 中coAwait方法
     }
 
     auto await_transform(CurrentExecutor) {
@@ -512,7 +512,7 @@ public:
 
         // derived lazy inherits executor
         this->_coro.promise()._executor = ex;
-        return typename Base::ValueAwaiter(std::exchange(this->_coro, nullptr));
+        return typename Base::ValueAwaiter(std::exchange(this->_coro, nullptr));  // 用新值替换对象的值，并返回对象的旧值
     }
 
 private:
